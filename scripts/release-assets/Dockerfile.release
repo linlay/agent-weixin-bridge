@@ -1,0 +1,12 @@
+ARG BASE_IMAGE=debian:bookworm-slim
+
+FROM ${BASE_IMAGE}
+
+WORKDIR /app
+
+COPY ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY bridge /app/bridge
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/bridge"]

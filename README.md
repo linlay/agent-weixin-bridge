@@ -20,33 +20,40 @@ Go 1.26 single-account Weixin bridge for `agent-platform-runner`.
 
 ## Environment
 
-See [`.env.example`](/Users/linlay/Project/zenmind/agent-weixin-bridge/.env.example).
+See `.env.example`.
 
 Key variables:
 
-- `BRIDGE_HTTP_ADDR`: bridge management API listen address. Default `:11958`.
-- `RUNNER_BASE_URL`: external runner base URL. Keep it independent from the bridge port.
-- `STATE_DIR`: bridge state directory used by the Go process.
-- `HOST_STATE_DIR`: docker compose host mount for Weixin state files such as `credential.json`, `status.json`, and user context files.
-- `AUTO_START_POLL`: when `true`, restart will resume polling if the saved Weixin credential is still valid.
+- `BRIDGE_HTTP_ADDR`: local development listen address. Default `:11958`.
+- `RUNNER_BASE_URL`: runner base URL. Recommended `http://agent-platform-runner:8080` when bridge and runner share `zenmind-network`.
+- `RUNNER_AGENT_KEY`: required runner routing key.
+- `RUNNER_BEARER_TOKEN`: optional bearer token for runner auth.
+- `HOST_STATE_DIR`: docker/deploy host directory for persistent Weixin session and bridge state.
+- `AUTO_START_POLL`: when `true`, bridge restart will resume polling if the saved Weixin credential is still valid.
 
-`RUNNER_AGENT_KEY` is required. Shell environment variables take precedence over values in `.env`.
+Shell environment variables take precedence over values in `.env`.
 
-## Local Run
+## Local Development
 
-Start the bridge:
+Run tests:
 
 ```bash
-go run ./cmd/bridge
+make test
 ```
 
-Management API now defaults to `:11958`.
+Start the bridge locally:
 
-Open the built-in console:
+```bash
+make run
+```
+
+This starts the management API on:
 
 ```text
 http://127.0.0.1:11958/
 ```
+
+If your runner is also local, set `RUNNER_BASE_URL=http://127.0.0.1:11949` in `.env`.
 
 Daily browser workflow:
 
@@ -63,39 +70,90 @@ The built-in page renders QR codes directly from `login/start.qrCodeUrl`:
 - direct image URLs render as images
 - page-style QR URLs such as `https://liteapp.weixin.qq.com/q/...` render as a locally generated QR code
 
-## Container Deployment
+## Docker Compose
+
+Create the shared network once:
+
+```bash
+docker network create zenmind-network
+```
 
 Build and start:
 
 ```bash
-docker compose up -d --build
+make docker-up
 ```
 
 Stop:
 
 ```bash
-docker compose down
+make docker-down
 ```
 
-Before running `docker compose`, set these values in [`.env`](/Users/linlay/Project/zenmind/agent-weixin-bridge/.env):
+The root `compose.yml` is for development or operations on the shared `zenmind-network`:
 
-- `BRIDGE_HTTP_ADDR=:11958`
+- bridge external address stays `http://127.0.0.1:11958/`
+- container internal port is fixed at `8080`
+- bridge joins external docker network `zenmind-network`
+- bridge is exposed on that network as `agent-weixin-bridge`
+
+Recommended `.env` for shared-network deployment:
+
+- `RUNNER_BASE_URL=http://agent-platform-runner:8080`
 - `HOST_STATE_DIR=./runtime/weixin-state`
-- `RUNNER_BASE_URL=http://host.docker.internal:11949` when the runner is running on the host machine
 
-`compose.yml` mounts `${HOST_STATE_DIR}` into `/app/var/state` and forces `STATE_DIR=/app/var/state` inside the container. This keeps Weixin session files on the host, so after the first successful login:
-
-- `credential.json` persists on the host
-- container restart can reuse the saved credential
-- re-scan is only needed if the Weixin credential itself has expired
-
-`compose.yml` also exposes the bridge on:
+If runner stays on the host machine instead of `zenmind-network`, switch to:
 
 ```text
-http://127.0.0.1:11958/
+RUNNER_BASE_URL=http://host.docker.internal:11949
 ```
 
-For Linux hosts, `compose.yml` includes `host.docker.internal:host-gateway` so the container can still reach a host-side runner.
+`HOST_STATE_DIR` stores persistent bridge state on the host, including:
+
+- `credential.json`
+- `status.json`
+- user context data used to preserve chat continuity
+
+Deleting `HOST_STATE_DIR` is equivalent to clearing the saved Weixin login and local bridge session state.
+
+## Release Bundle
+
+Build a release bundle:
+
+```bash
+make release
+```
+
+This produces:
+
+```text
+dist/release/agent-weixin-bridge-vX.Y.Z-linux-<arch>.tar.gz
+```
+
+The release bundle follows the same deployment style as `agent-platform-runner`:
+
+- versioned image tar
+- `compose.release.yml`
+- `.env.example`
+- `start.sh`
+- `stop.sh`
+- `README.txt`
+
+Deploying the bundle:
+
+1. Create `zenmind-network` if it does not exist.
+2. Extract the tarball.
+3. Copy `.env.example` to `.env`.
+4. Set `RUNNER_BASE_URL`, `RUNNER_AGENT_KEY`, `RUNNER_BEARER_TOKEN`, and `HOST_STATE_DIR`.
+5. Run `./start.sh`.
+6. Stop with `./stop.sh`.
+
+The bundle auto-loads the offline Docker image and auto-creates `HOST_STATE_DIR` when missing.
+
+Repository deployment and release bundle are both kept intentionally:
+
+- Root `compose.yml`: for source-repo deployment or local integration work
+- `make release` bundle: for versioned offline delivery and deployment-machine startup
 
 ## Management Endpoints
 

@@ -5,10 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: agent-weixin-bridge
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
-      - "11958:11958"
+      - "11958:8080"
     environment:
-      BRIDGE_HTTP_ADDR: ":11958"
+      BRIDGE_HTTP_ADDR: ":8080"
       WEIXIN_BASE_URL: "${WEIXIN_BASE_URL}"
       WEIXIN_BOT_TYPE: "${WEIXIN_BOT_TYPE}"
       RUNNER_BASE_URL: "${RUNNER_BASE_URL}"
@@ -21,3 +23,11 @@ services:
       - "${HOST_STATE_DIR:-./runtime/weixin-state}:/app/var/state"
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      zenmind-network:
+        aliases:
+          - agent-weixin-bridge
+
+networks:
+  zenmind-network:
+    external: true

@@ -16,6 +16,6 @@ WORKDIR /app
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/bridge /app/bridge
 
-EXPOSE 11958
+EXPOSE 8080
 
 ENTRYPOINT ["/app/bridge"]

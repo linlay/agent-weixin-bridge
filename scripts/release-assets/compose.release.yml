@@ -1,0 +1,28 @@
+name: agent-weixin-bridge
+
+services:
+  bridge:
+    container_name: agent-weixin-bridge
+    image: agent-weixin-bridge:${BRIDGE_VERSION:-latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${HOST_PORT:-11958}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      BRIDGE_HTTP_ADDR: ":8080"
+      STATE_DIR: "/app/var/state"
+    volumes:
+      - type: bind
+        source: ${HOST_STATE_DIR:-./runtime/weixin-state}
+        target: /app/var/state
+    networks:
+      zenmind-network:
+        aliases:
+          - agent-weixin-bridge
+
+networks:
+  zenmind-network:
+    external: true
