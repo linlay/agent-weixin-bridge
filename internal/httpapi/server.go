@@ -142,7 +142,7 @@ func (s *Server) accountStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) pollStart(w http.ResponseWriter, r *http.Request) {
-	if err := s.deps.PollManager.Start(r.Context()); err != nil {
+	if err := s.deps.PollManager.Start(context.Background()); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
