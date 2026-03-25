@@ -1,0 +1,23 @@
+services:
+  bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agent-weixin-bridge
+    restart: unless-stopped
+    ports:
+      - "11958:11958"
+    environment:
+      BRIDGE_HTTP_ADDR: ":11958"
+      WEIXIN_BASE_URL: "${WEIXIN_BASE_URL}"
+      WEIXIN_BOT_TYPE: "${WEIXIN_BOT_TYPE}"
+      RUNNER_BASE_URL: "${RUNNER_BASE_URL}"
+      RUNNER_AGENT_KEY: "${RUNNER_AGENT_KEY}"
+      RUNNER_BEARER_TOKEN: "${RUNNER_BEARER_TOKEN}"
+      STATE_DIR: "/app/var/state"
+      LOG_LEVEL: "${LOG_LEVEL}"
+      AUTO_START_POLL: "${AUTO_START_POLL}"
+    volumes:
+      - "${HOST_STATE_DIR:-./runtime/weixin-state}:/app/var/state"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

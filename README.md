@@ -18,57 +18,84 @@ Go 1.26 single-account Weixin bridge for `agent-platform-runner`.
 - Text-only bridge between Weixin and runner
 - No Weixin-side support yet for runner frontend tools, `submit`, `steer`, or `interrupt`
 
-## Run
+## Environment
+
+See [`.env.example`](/Users/linlay/Project/zenmind/agent-weixin-bridge/.env.example).
+
+Key variables:
+
+- `BRIDGE_HTTP_ADDR`: bridge management API listen address. Default `:11958`.
+- `RUNNER_BASE_URL`: external runner base URL. Keep it independent from the bridge port.
+- `STATE_DIR`: bridge state directory used by the Go process.
+- `HOST_STATE_DIR`: docker compose host mount for Weixin state files such as `credential.json`, `status.json`, and user context files.
+- `AUTO_START_POLL`: when `true`, restart will resume polling if the saved Weixin credential is still valid.
+
+`RUNNER_AGENT_KEY` is required. Shell environment variables take precedence over values in `.env`.
+
+## Local Run
+
+Start the bridge:
 
 ```bash
 go run ./cmd/bridge
 ```
 
-Management API defaults to `:8091`.
-The bridge automatically loads `.env` from the current working directory when starting.
+Management API now defaults to `:11958`.
 
-## Browser Workflow
-
-1. Start the bridge:
-
-```bash
-go run ./cmd/bridge
-```
-
-2. Open the built-in console in your browser:
+Open the built-in console:
 
 ```text
-http://127.0.0.1:8091/
+http://127.0.0.1:11958/
 ```
 
+Daily browser workflow:
+
+1. Start the bridge.
+2. Open `http://127.0.0.1:11958/`.
 3. Click `生成二维码`.
 4. Scan the QR code with Weixin and confirm on your phone.
 5. Wait until the page shows `confirmed` / `已连接`.
-6. Click `开始轮询` to start receiving inbound messages.
+6. Polling starts automatically when `AUTO_START_POLL=true`; otherwise click `开始轮询`.
 
-The built-in page now renders QR codes from `login/start.qrCodeUrl` directly in the browser:
+The built-in page renders QR codes directly from `login/start.qrCodeUrl`:
 
-- data URLs and base64 image payloads are shown as images
-- direct image URLs are loaded as images
-- page-style QR URLs (such as `https://liteapp.weixin.qq.com/q/...`) are converted into a local QR code on the page
+- data URLs and base64 payloads render as images
+- direct image URLs render as images
+- page-style QR URLs such as `https://liteapp.weixin.qq.com/q/...` render as a locally generated QR code
 
-The bridge QR-image endpoint remains available for compatibility and debugging of image-based QR payloads, but the browser workflow no longer depends on it.
+## Container Deployment
 
-The built-in page also shows:
+Build and start:
 
-- bridge health status
-- current Weixin account status
-- polling status
-- recent inbound / outbound timestamps
-- last error
-- raw JSON responses for `login/start`, `login/status`, and `account`
+```bash
+docker compose up -d --build
+```
 
-## Environment
+Stop:
 
-See `.env.example`.
+```bash
+docker compose down
+```
 
-`RUNNER_AGENT_KEY` is required. The bridge always sends Weixin messages to that configured runner agent instead of relying on the runner default agent.
-Shell environment variables take precedence over values in `.env`, so `.env` acts as a local default for development.
+Before running `docker compose`, set these values in [`.env`](/Users/linlay/Project/zenmind/agent-weixin-bridge/.env):
+
+- `BRIDGE_HTTP_ADDR=:11958`
+- `HOST_STATE_DIR=./runtime/weixin-state`
+- `RUNNER_BASE_URL=http://host.docker.internal:11949` when the runner is running on the host machine
+
+`compose.yml` mounts `${HOST_STATE_DIR}` into `/app/var/state` and forces `STATE_DIR=/app/var/state` inside the container. This keeps Weixin session files on the host, so after the first successful login:
+
+- `credential.json` persists on the host
+- container restart can reuse the saved credential
+- re-scan is only needed if the Weixin credential itself has expired
+
+`compose.yml` also exposes the bridge on:
+
+```text
+http://127.0.0.1:11958/
+```
+
+For Linux hosts, `compose.yml` includes `host.docker.internal:host-gateway` so the container can still reach a host-side runner.
 
 ## Management Endpoints
 
@@ -86,7 +113,7 @@ Shell environment variables take precedence over values in `.env`, so `.env` act
 Set the base URL first:
 
 ```bash
-BASE="http://127.0.0.1:8091"
+BASE="http://127.0.0.1:11958"
 ```
 
 Health check:
@@ -132,9 +159,3 @@ Stop polling:
 ```bash
 curl -sS -X POST "$BASE/api/weixin/poll/stop"
 ```
-
-Recommended usage:
-
-- use `http://127.0.0.1:8091/` for daily login and operations
-- use `curl` for debugging, automation, and API verification
-# agent-weixin-bridge
